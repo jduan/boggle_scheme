@@ -120,16 +120,20 @@
   (set-member? dictionary str))
 
 (define (find-words position visited position-to-neighbors position-to-letter lst dictionary)
-  (for ([neighbor (hash-ref position-to-neighbors position)])
-    (when (not (hash-ref visited neighbor))
-      (let* ([neighbor-letter (hash-ref position-to-letter neighbor)]
-             [new-lst (append lst (list neighbor-letter))]
-             [word (list-of-symbols-to-word new-lst)]
-             [new-visited (hash-set visited neighbor true)])
-        (when (is-a-word? word dictionary)
-          (print word)          )
-        (find-words neighbor new-visited position-to-neighbors position-to-letter new-lst dictionary))
-   )))
+  (foldl
+    (lambda (neighbor all-words)
+            (if (hash-ref visited neighbor)
+              all-words
+              (let* ([neighbor-letter (hash-ref position-to-letter neighbor)]
+                     [new-lst (append lst (list neighbor-letter))]
+                     [word (list-of-symbols-to-word new-lst)]
+                     [new-visited (hash-set visited neighbor true)]
+                     [rest-words (find-words neighbor new-visited position-to-neighbors position-to-letter new-lst dictionary)])
+                (if (is-a-word? word dictionary)
+                  (set-union (set-add all-words word) rest-words)
+                  (set-union all-words rest-words)))))
+    (set)
+    (hash-ref position-to-neighbors position)))
 
 (find-words (position 0 0)
             (hash-set visited (position 0 0) true)
