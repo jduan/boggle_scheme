@@ -1,18 +1,20 @@
 #lang racket
 (struct position (row column) #:transparent)
 
-(define (list-to-hash list-of-lists)
+;; input: a list of pairs
+;; output: a hash mapping from the first of the paris to the second of the pairs
+(define (list-to-hash list-of-pairs)
   (foldl
     (lambda (lst hsh)
             (hash-set hsh (first lst) (second lst)))
     (hash)
-    list-of-lists))
+    list-of-pairs))
 
-(define (preprocess list-of-lists func)
-  (local [(define height (length list-of-lists))
-          (define width (length (first list-of-lists)))
+(define (preprocess board func)
+  (local [(define height (length board))
+          (define width (length (first board)))
           (define big-list
-            (foldr append empty list-of-lists))]
+            (foldr append empty board))]
          (func height width big-list)))
 
 (define (build-hash height width big-list)
@@ -23,8 +25,8 @@
                     [column (remainder index width)])
                 (list (position row column) letter)))))
 
-(define (build-big-hash list-of-lists)
-  (preprocess list-of-lists build-hash))
+(define (build-big-hash board)
+  (preprocess board build-hash))
 
 (define (build-neighbors height width big-list)
   (list-to-hash
@@ -48,11 +50,11 @@
                                     (position (add1 row) (add1 column))))])
                 (list (position row column) neighbors)))))
 
-(define (build-all-neighbors list-of-lists)
-  (preprocess list-of-lists build-neighbors))
+(define (build-all-neighbors board)
+  (preprocess board build-neighbors))
 
-(define (build-visited list-of-lists)
-  (preprocess list-of-lists
+(define (build-visited board)
+  (preprocess board
               (lambda (height width big-list)
                       (list-to-hash
                         (for/list ([index (in-naturals)]
@@ -61,8 +63,8 @@
                                         [column (remainder index width)])
                                     (list (position row column) false)))))))
 
-(define (build-positions list-of-lists)
-  (preprocess list-of-lists
+(define (build-positions board)
+  (preprocess board
               (lambda (height width big-list)
                       (for/list ([index (in-naturals)]
                                  [letter big-list])
@@ -122,10 +124,15 @@
 
 (define board
   (list
-    '(C O D A)
-    '( A R N P )
-    '( O S E L )
-    '(I R U M)))
+    '(C O)
+    '( A R)))
+
+;(define board
+;  (list
+;    '(C O D A)
+;    '( A R N P )
+;    '( O S E L )
+;    '(I R U M)))
 
 
 ;(define board
