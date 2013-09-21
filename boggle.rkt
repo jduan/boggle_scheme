@@ -1,21 +1,5 @@
 #lang racket
 (struct position (row column) #:transparent)
-(struct cell (row column value ) #:transparent)
-;
-;(define board
-;  (list
-;    '(C O D A)
-;    '( A R N P )
-;    '( O S E L )
-;    '(I R U M)))
-
-
-(define board
-  (list
-    '(O A A N)
-    '(E T R I)
-    '(I H K R)
-    '(I F L V)))
 
 (define (list-to-hash list-of-lists)
   (foldl
@@ -42,11 +26,6 @@
 (define (build-big-hash list-of-lists)
   (preprocess list-of-lists build-hash))
 
-;; a hash mapping from position to letter
-(define position-to-letter
-  (build-big-hash
-    board))
-
 (define (build-neighbors height width big-list)
   (list-to-hash
     (for/list ([index (in-naturals)]
@@ -72,10 +51,6 @@
 (define (build-all-neighbors list-of-lists)
   (preprocess list-of-lists build-neighbors))
 
-(define position-to-neighbors
-  (build-all-neighbors
-    board))
-
 (define (build-visited list-of-lists)
   (preprocess list-of-lists
               (lambda (height width big-list)
@@ -86,10 +61,6 @@
                                         [column (remainder index width)])
                                     (list (position row column) false)))))))
 
-(define visited
-  (build-visited
-    board))
-
 (define (build-positions list-of-lists)
   (preprocess list-of-lists
               (lambda (height width big-list)
@@ -99,22 +70,12 @@
                                       [column (remainder index width)])
                                   (position row column))))))
 
-(define positions
-  (build-positions
-    board))
-
 (define (list-of-symbols-to-word symbols)
   (foldl
     (lambda (sym word)
             (string-append word (symbol->string sym)))
     ""
     symbols))
-(define dictionary
-  (foldl
-   (lambda (sym a-set)
-     (set-add a-set (string-upcase (symbol->string sym))))
-   (set)
-   (file->list "/usr/share/dict/web2")))
 
 (define (is-a-word? str dictionary)
   (set-member? dictionary str))
@@ -135,10 +96,43 @@
     (set)
     (hash-ref position-to-neighbors position)))
 
-(find-words (position 0 0)
-            (hash-set visited (position 0 0) true)
-            position-to-neighbors
-            position-to-letter
-            '(C)
-            dictionary)
+(define (build-dictionary filename)
+  (foldl
+   (lambda (sym a-set)
+     (set-add a-set (string-upcase (symbol->string sym))))
+   (set)
+   (file->list filename)))
 
+(define (find-all-words board)
+  (let ([position-to-letter (build-big-hash board)]
+        [position-to-neighbors (build-all-neighbors board)]
+        [visited (build-visited board)]
+        [positions (build-positions board)]
+        [dictionary (build-dictionary  "/usr/share/dict/web2")])
+    (map
+      (lambda (position)
+              (find-words position
+                          (hash-set visited position true)
+                          position-to-neighbors
+                          position-to-letter
+                          (list (hash-ref position-to-letter position))
+                          dictionary))
+      positions)
+    ))
+
+(define board
+  (list
+    '(C O D A)
+    '( A R N P )
+    '( O S E L )
+    '(I R U M)))
+
+
+;(define board
+;  (list
+;    '(O A A N)
+;    '(E T R I)
+;    '(I H K R)
+;    '(I F L V)))
+
+(find-all-words board)
