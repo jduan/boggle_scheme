@@ -1,14 +1,25 @@
 #lang racket
+(require test-engine/racket-tests)
 (struct position (row column) #:transparent)
 
-;; input: a list of pairs
-;; output: a hash mapping from the first of the paris to the second of the pairs
+;; (listof lists) -> hash
+;; Build a hash out of a list of lists. Each inner list is a key-value
+;; pair. The returned hash maps from the keys to the values in the
+;; pairs.
 (define (list->hash list-of-pairs)
   (foldl
     (lambda (lst hsh)
             (hash-set hsh (first lst) (second lst)))
     (hash)
     list-of-pairs))
+
+(check-expect
+  (list->hash '(("apple" red) ("banana" yellow)))
+  (hash "apple" 'red "banana" 'yellow))
+(check-expect
+  (list->hash (list (list (position 0 0) 'A)
+                    (list (position 0 1) 'B)))
+  (hash (position 0 0) 'A (position 0 1) 'B))
 
 ;; input:
 ;; board: a boggle board
@@ -178,4 +189,6 @@
 ;    '(I H K R)
 ;    '(I F L V)))
 
-(find-all-words board)
+;(find-all-words board)
+;
+(test)
