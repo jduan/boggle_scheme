@@ -6,12 +6,12 @@
 ;; Build a hash out of a list of lists. Each inner list is a key-value
 ;; pair. The returned hash maps from the keys to the values in the
 ;; pairs.
-(define (list->hash list-of-pairs)
+(define (list->hash list-of-key-value-pairs)
   (foldl
     (lambda (lst hsh)
             (hash-set hsh (first lst) (second lst)))
     (hash)
-    list-of-pairs))
+    list-of-key-value-pairs))
 
 (check-expect
   (list->hash '(("apple" red) ("banana" yellow)))
@@ -102,7 +102,9 @@
                                         [column (remainder index width)])
                                     (list (position row column) false)))))))
 
-;; Return a list of positions
+;; build-positions : (listof lists) -> (listof positions)
+;; Given a boggle board, return a list of positions (struct) for all the cells
+;; on the board.
 (define (build-positions board)
   (preprocess board
               (lambda (height width big-list)
@@ -111,6 +113,15 @@
                                 (let ([row (quotient index width)]
                                       [column (remainder index width)])
                                   (position row column))))))
+
+(check-expect (build-positions
+                '(('A 'B)
+                  ('C 'D)))
+              (list
+                (position 0 0)
+                (position 0 1)
+                (position 1 0)
+                (position 1 1)))
 
 ;; Return a word from a list of symbols
 (define (list-of-symbols-to-word symbols)
@@ -132,42 +143,105 @@
     (set)
     (file->list filename)))
 
-;; Find words from a single position
-(define (find-words position lst visited position-to-neighbors position-to-letter dictionary)
-  (foldl
-    (lambda (neighbor all-words)
-            (if (hash-ref visited neighbor)
-              all-words
-              (let* ([neighbor-letter (hash-ref position-to-letter neighbor)]
-                     [new-lst (append lst (list neighbor-letter))]
-                     [word (list-of-symbols-to-word new-lst)]
-                     [new-visited (hash-set visited neighbor true)]
-                     [rest-words (find-words neighbor new-lst new-visited
-                                             position-to-neighbors
-                                             position-to-letter dictionary)])
-                (if (is-a-word? word dictionary)
-                  (set-union (set-add all-words word) rest-words)
-                  (set-union all-words rest-words)))))
-    (set)
-    (hash-ref position-to-neighbors position)))
 
-;; Find all possible words of a boggle board
+(define (find-strings-from-position board position position-to-neighbors position-to-letter)
+  (local [(define (breadth-first-search partial-string
+                                        visited
+                                        position-to-neighbors
+                                        position-to-letter)
+            (foldl
+              (lambda (neighbor string-set)
+                      (if (hash-ref visited neighbor)
+                        string-set
+                        (let* ([neighbor-letter (hash-ref position-to-letter neighbor)]
+                               [new-partial-string (append partial-string (list neighbor-letter))]
+                               [word (list-of-symbols-to-word new-partial-string)]
+                               [new-visited (hash-set visited neighbor true)]
+                               [rest-words (breadth-first-search new-partial-string
+                                                                 new-visited
+                                                                 position-to-neighbors
+                                                                 position-to-letter)])
+                          (set-union (set-add string-set word) rest-words))))
+              (set)
+              (hash-ref position-to-neighbors position)))]
+         (breadth-first-search
+           (list (hash-ref position-to-letter position))
+           (hash-set (build-visited board) position true)
+           position-to-neighbors
+           position-to-letter)))
+
+(check-expect (find-strings-from-position
+                '(('A 'B) ('C 'D))
+                (position 0 0)
+                (hash (position 0 0) (list (position 0 1) (position 1 0) (position 1 1))
+                      (position 0 1) (list (position 0 0) (position 1 0) (position 1 1))
+                      (position 1 0) (list (position 0 0) (position 0 1) (position 1 1))
+                      (position 1 1) (list (position 0 0) (position 0 1) (position 1 0)))
+                (hash (position 0 0) 'A
+                      (position 0 1) 'B
+                      (position 1 0) 'C
+                      (position 1 1) 'D))
+              (set "AB" "AC" "AD" "ABC" "ABD" "ACD" "ACB" "ADB" "ADC" "ABCD" "ABDC" "ACBD"
+                   "ACDB" "ADBC" "ADCB"))
+
+
+(define (find-words-from-position board position position-to-neighbors position-to-letter dictionary)
+  (let [(strings-from-position (find-strings-from-position board position
+                                                           position-to-neighbors
+                                                           position-to-letter))]
+    (list->set (filter (lambda (str) (is-a-word? str dictionary))
+                       (set->list strings-from-position)))))
+
+(check-expect (find-words-from-position
+                '((A B) (C D))
+                (position 0 0)
+                (hash (position 0 0) (list (position 0 1) (position 1 0) (position 1 1))
+                      (position 0 1) (list (position 0 0) (position 1 0) (position 1 1))
+                      (position 1 0) (list (position 0 0) (position 0 1) (position 1 1))
+                      (position 1 1) (list (position 0 0) (position 0 1) (position 1 0)))
+                (hash (position 0 0) 'A
+                      (position 0 1) 'B
+                      (position 1 0) 'C
+                      (position 1 1) 'D)
+                (set "ABC" "ABCD" "hello" "world"))
+              (set "ABC" "ABCD"))
+
+;; find-all-words : (listof lists) -> (setof strings)
+;; Find all possible words of a boggle board. The basic idea is:
+;; Find all the words starting from every single cell of the board.
+;; Return all the words found above.
 (define (find-all-words board)
   (let ([position-to-letter (build-position-to-letter board)]
         [position-to-neighbors (build-position-to-neighbor board)]
         [visited (build-visited board)]
         [positions (build-positions board)]
         [dictionary (build-dictionary  "/usr/share/dict/web2")])
-    (map
-      (lambda (position)
-              (find-words position
-                          (list (hash-ref position-to-letter position))
-                          (hash-set visited position true)
-                          position-to-neighbors
-                          position-to-letter
-                          dictionary))
-      positions)
-    ))
+    (list-of-sets->set
+      (map
+        (lambda (position)
+                (find-words-from-position board
+                                          position
+                                          position-to-neighbors
+                                          position-to-letter
+                                          dictionary))
+        positions))))
+
+(check-expect (find-all-words
+                '((A B) (C D)))
+              (set "BA" "CA" "DA" "AB" "AD" "BAC" "CAB" "DAB" "BAD" "CAD"))
+
+(define (list-of-sets->set list-of-sets)
+  (foldl
+   (lambda (a-set final-set)
+           (set-union final-set a-set))
+    (set)
+    list-of-sets))
+
+(check-expect (list-of-sets->set
+                (list (set 1 2)
+                      (set 3 4)
+                      (set 1 2 3 4)))
+              (set 1 2 3 4))
 
 (define board
   (list
