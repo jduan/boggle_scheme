@@ -21,79 +21,77 @@
                     (list (position 0 1) 'B)))
   (hash (position 0 0) 'A (position 0 1) 'B))
 
-;; input:
-;; board: a boggle board
-;; func: a function that get's called with the height, the width, and a single
-;; list of all the rows appended.
-;;
-;; output:
-;; whatever is returned by func
-;;
-(define (preprocess board func)
+;; (list-of-lists any-func) -> (any-func height width big-list)
+;; This is a generic function that processes a boggle board. It calls the "func"
+;; with the height of the board, the width of the board, and a list of all the
+;; cells of the board.
+(define (process-board board func)
   (local [(define height (length board))
           (define width (length (first board)))
           (define big-list
             (foldr append empty board))]
          (func height width big-list)))
 
-;; input:
-;; height: the height of the board
-;; width: the width of the board
-;; big-list: the list of all the rows of the board
-;;
-;; output:
-;; a hash mapping from positions to letters
-(define (build-hash height width big-list)
-  (list->hash
-    (for/list ([index (in-naturals)]
-               [letter big-list])
-              (let ([row (quotient index width)]
-                    [column (remainder index width)])
-                (list (position row column) letter)))))
-
-;; input:
-;; board; a boggle board
-;;
-;; output:
-;; a hash mapping from positions to letters
+;; (listof lists) -> (hashof positions to letters)
+;; Build a hash mapping from positions to letters
 (define (build-position-to-letter board)
-  (preprocess board build-hash))
+  (local [(define (build-hash height width big-list)
+            (list->hash
+              (for/list ([index (in-naturals)]
+                         [letter big-list])
+                        (let ([row (quotient index width)]
+                              [column (remainder index width)])
+                          (list (position row column) letter)))))]
+         (process-board board build-hash)))
 
-;; input:
-;; height: the height of the board
-;; width: the width of the board
-;; big-list: the list of all the rows of the board
-;;
-;; output:
-;; a hash mapping from positions to their neighbors (a list of positions)
-(define (build-neighbors height width big-list)
-  (list->hash
-    (for/list ([index (in-naturals)]
-               [letter big-list])
-              (let* ([row (quotient index width)]
-                     [column (remainder index width)]
-                     [neighbors (filter
-                                  (lambda (position)
-                                          (and
-                                            (<= 0 (position-row position) (sub1 height))
-                                            (<= 0 (position-column position) (sub1 width))))
-                                  (list
-                                    (position (sub1 row) (sub1 column))
-                                    (position (sub1 row) column)
-                                    (position (sub1 row) (add1 column))
-                                    (position row (sub1 column))
-                                    (position row (add1 column))
-                                    (position (add1 row) (sub1 column))
-                                    (position (add1 row) column)
-                                    (position (add1 row) (add1 column))))])
-                (list (position row column) neighbors)))))
+(check-expect (build-position-to-letter
+                '((A B)
+                    (C D)))
+              (hash (position 0 0) 'A
+                    (position 0 1) 'B
+                    (position 1 0) 'C
+                    (position 1 1) 'D))
 
+;; (listof lists) -> (hashof position to neighbors)
+;; Build a hash mapping from positions to their neighbors which are a list of
+;; positions
 (define (build-position-to-neighbor board)
-  (preprocess board build-neighbors))
+  (local [(define (build-neighbors height width big-list)
+            (list->hash
+              (for/list ([index (in-naturals)]
+                         [letter big-list])
+                        (let* ([row (quotient index width)]
+                               [column (remainder index width)]
+                               [neighbors (filter
+                                            (lambda (position)
+                                                    (and
+                                                      (<= 0 (position-row position) (sub1 height))
+                                                      (<= 0 (position-column position) (sub1 width))))
+                                            (list
+                                              (position (sub1 row) (sub1 column))
+                                              (position (sub1 row) column)
+                                              (position (sub1 row) (add1 column))
+                                              (position row (sub1 column))
+                                              (position row (add1 column))
+                                              (position (add1 row) (sub1 column))
+                                              (position (add1 row) column)
+                                              (position (add1 row) (add1 column))))])
+                          (list (position row column) neighbors)))))]
+         (process-board board build-neighbors)))
 
-;; Return a hash mapping from position to a boolean (if its' been visited)
+(check-expect (build-position-to-neighbor
+                '((A B)
+                    (C D)))
+              (hash (position 0 0) (list (position 0 1) (position 1 0) (position 1 1))
+                    (position 0 1) (list (position 0 0) (position 1 0) (position 1 1))
+                    (position 1 0) (list (position 0 0) (position 0 1) (position 1 1))
+                    (position 1 1) (list (position 0 0) (position 0 1) (position 1 0))))
+
+;; (listof lists) -> (hashof positions to booleans)
+;; Return a hash mapping from positions to false The booleans indicate that none
+;; of the cells has been visited.
 (define (build-visited board)
-  (preprocess board
+  (process-board board
               (lambda (height width big-list)
                       (list->hash
                         (for/list ([index (in-naturals)]
@@ -102,11 +100,20 @@
                                         [column (remainder index width)])
                                     (list (position row column) false)))))))
 
+(check-expect (build-visited
+                '((A B)
+                    (C D)))
+              (hash (position 0 0) false
+                    (position 0 1) false
+                    (position 1 0) false
+                    (position 1 1) false))
+
+
 ;; build-positions : (listof lists) -> (listof positions)
 ;; Given a boggle board, return a list of positions (struct) for all the cells
 ;; on the board.
 (define (build-positions board)
-  (preprocess board
+  (process-board board
               (lambda (height width big-list)
                       (for/list ([index (in-naturals)]
                                  [letter big-list])
@@ -115,14 +122,15 @@
                                   (position row column))))))
 
 (check-expect (build-positions
-                '(('A 'B)
-                  ('C 'D)))
+                '((A B)
+                  (C D)))
               (list
                 (position 0 0)
                 (position 0 1)
                 (position 1 0)
                 (position 1 1)))
 
+;; (listof symbols) -> string
 ;; Return a word from a list of symbols
 (define (list-of-symbols-to-word symbols)
   (foldl
@@ -131,10 +139,17 @@
     ""
     symbols))
 
+(check-expect (list-of-symbols-to-word '(h e l l o)) "hello")
+
+;; string hash -> boolean
 ;; Determine if a given string is a word or not using a dictionary
 (define (is-a-word? str dictionary)
   (set-member? dictionary str))
 
+(check-expect (is-a-word? "hello" (set "hello" "world")) true)
+(check-expect (is-a-word? "print" (set "hello" "world")) false)
+
+;; string -> set
 ;; Build a dictionary set from a dictionary file
 (define (build-dictionary filename)
   (foldl
@@ -143,7 +158,16 @@
     (set)
     (file->list filename)))
 
+;; How can I test build-dictionary?
 
+;; (listof lists) position hash hash -> set
+;; Given:
+;; * a boggle board
+;; * a starting position
+;; * a hash mapping from positions to their neighbors
+;; * a hash mapping from positions to letters
+;;
+;; Return all the possible strings starting from the given position.
 (define (find-strings-from-position board position position-to-neighbors position-to-letter)
   (local [(define (breadth-first-search partial-string
                                         visited
@@ -185,6 +209,15 @@
                    "ACDB" "ADBC" "ADCB"))
 
 
+;; (listof lists) position hash hash -> set
+;; Given:
+;; * a boggle board
+;; * a starting position
+;; * a hash mapping from positions to their neighbors
+;; * a hash mapping from positions to letters
+;; * a dictionary
+;;
+;; Return all the possible words starting from the given position.
 (define (find-words-from-position board position position-to-neighbors position-to-letter dictionary)
   (let [(strings-from-position (find-strings-from-position board position
                                                            position-to-neighbors
@@ -230,6 +263,8 @@
                 '((A B) (C D)))
               (set "BA" "CA" "DA" "AB" "AD" "BAC" "CAB" "DAB" "BAD" "CAD"))
 
+;; (listof sets) -> set
+;; Given a list of sets, return a set that is the union of all the given sets
 (define (list-of-sets->set list-of-sets)
   (foldl
    (lambda (a-set final-set)
@@ -243,26 +278,20 @@
                       (set 1 2 3 4)))
               (set 1 2 3 4))
 
-(define board
+(find-all-words
   (list
     '(C O)
-    '(A R)))
-
-;(define board
-;  (list
-;    '(C O D A)
-;    '(A R N P)
-;    '(O S E L)
-;    '(I R U M)))
-
-
-;(define board
-;  (list
-;    '(O A A N)
-;    '(E T R I)
-;    '(I H K R)
-;    '(I F L V)))
-
-;(find-all-words board)
+    '(A R))
+  ;(list
+  ;  '(C O D A)
+  ;  '(A R N P)
+  ;  '(O S E L)
+  ;  '(I R U M))
+  ;(list
+  ;  '(O A A N)
+  ;  '(E T R I)
+  ;  '(I H K R)
+  ;  '(I F L V))
+  )
 ;
 (test)
